@@ -79,7 +79,7 @@ class Linear2dSystem:
                     continue
                 if m==0 and n==0:
                     continue
-                eig = (eigvalue_i)**m * (eigvalue_j) ** n
+                eig = (self.eig_i)**m * (self.eig_j) ** n
                 eig_dict[(m,n)] = eig
             
         sorted_eig = sorted(eig_dict, key=eig_dict.get, reverse=True)
