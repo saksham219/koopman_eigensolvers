@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from datafold.pcfold import TSCDataFrame
+import matplotlib.pyplot as plt
 
 class Linear2dSystem:
 
@@ -44,6 +45,25 @@ class Linear2dSystem:
         tsc_data = TSCDataFrame.from_frame_list(time_series_dfs)
         return tsc_data
 
+    def generate_trajectory(self, initial_condition, n_steps = 100):
+        """Generate a trajectory with given number of steps and initial condition
+
+        Args:
+            initial_condition (_type_): 2d numpy array
+            n_steps (int, optional): _description_. Defaults to 100.
+
+        Returns:
+            _type_: _description_
+        """
+        df = [initial_condition.flatten()]
+        solution = initial_condition.flatten()
+        for s in np.arange(0, n_steps):
+            solution = self.A@ solution
+            df.append(solution)
+
+        df = pd.DataFrame(df, columns=["x1", "x2"])
+        return df
+
     def generate_eigenfunction(self, x, y, m = 1, n = 1):
         """generate explicit koopman eigenfunctions
 
@@ -65,7 +85,7 @@ class Linear2dSystem:
         
         return p
     
-    def get_sorted_eigvalues(self, max_exponent_sum=3):
+    def get_sorted_eigvalues(self, max_exponent_sum=4):
         """get sorted koopman eigenvalues where eigenvalues are powers of explicit eigenvalues and their products
         
         Args:
@@ -73,9 +93,9 @@ class Linear2dSystem:
         """
 
         eig_dict = {}
-        for m in range(4):
-            for n in range(4):
-                if m+n>3:
+        for m in range(max_exponent_sum+1):
+            for n in range(max_exponent_sum+1):
+                if m+n>max_exponent_sum:
                     continue
                 if m==0 and n==0:
                     continue
@@ -87,3 +107,25 @@ class Linear2dSystem:
         return sorted_eig
                      
 
+
+    def plot_eigenfunction_contour(self, x, y,  m, n, ax, normalize=True):
+        """Plot a contour map of a given powers of eigenfunction
+
+        Args:
+            x: x-range of grid
+            y: y-range of grid
+            m (_type_): exponent of first eigenfunction
+            n (_type_): exponent of second eigenfunction
+            ax (_type_): _description_
+            normalize: normalize grid values to be between -1 and 1
+
+        Returns:
+            _type_: _description_
+        """
+        X, Y = np.meshgrid(x, y)
+        Z = self.generate_eigenfunction(X, Y, m,n)
+        if normalize:
+            Z = Z/np.max(np.abs(Z))
+
+        h = ax.contourf(X, Y, Z, cmap='RdYlBu_r')
+        plt.colorbar(h) 
