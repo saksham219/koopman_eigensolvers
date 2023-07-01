@@ -49,7 +49,7 @@ class KoopmanEigenSolvers:
         return lambda x: self.dict_transform(x) @ left_eigenvector
         
 
-    def extend_eigenfunctions(self, x:np.ndarray, eigenvector_indexes = [0,1], pow_i = 1, pow_j = 1 ):
+    def extend_eigenfunctions(self, x:np.ndarray, eigenvector_indexes = [0,1], pow_i = 1, pow_j = 1, normalize=True ):
         """Generate a new set of eigenfunctions for the koopman operator using two left eigenvectors of the koopman matrix
 
         Args:
@@ -67,7 +67,8 @@ class KoopmanEigenSolvers:
         v_2_phi = (dictionary_eval @ self.left_koopman_eigvecs[:,eigenvector_indexes[1]])
        
         eigfunc_extended = (v_1_phi ** pow_i) * (v_2_phi ** pow_j)      
-        eigfunc_extended = eigfunc_extended/np.max(np.abs(eigfunc_extended))
+        if normalize:
+            eigfunc_extended = eigfunc_extended/np.max(np.abs(eigfunc_extended))
 
         return eigfunc_extended
 
