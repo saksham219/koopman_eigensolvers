@@ -23,6 +23,14 @@ class KoopmanEigenSolversDMD:
         # calculate left eigenvectors
         self.left_koopman_eigvals, self.left_koopman_eigvecs = sort_eigenpairs(*np.linalg.eig(self.koopman_matrix.T))
 
+    def dict_transform(self, x: np.ndarray):
+        """Identity
+
+        Args:
+            x (np.ndarray): _description_
+        """
+        return x
+
 
     def eigenfunction_left(self, left_eigenvector):
         """Generate eigenfunction of the Koopman operator using a left eigenvector

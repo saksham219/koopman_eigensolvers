@@ -129,3 +129,60 @@ class Linear2dSystem:
 
         h = ax.contourf(X, Y, Z, cmap='RdYlBu_r')
         plt.colorbar(h) 
+
+
+    def trajectory_error_power(self, koopman_eigen, x, p, eigenvector_index=0):        
+        """Compute trajectory error for extended eigenfunction
+
+
+        Args:
+            koopman_eigen (KoopmanEigen): object of koopman eigen
+            x (_type_): values of grid coordinates
+            p (_type_): power
+            eigenvector_index (int, optional): Eigenvector index to use for extending eigenfunction. Defaults to 0.
+        """
+        assert x.shape[1] == 2
+
+        Z_l = koopman_eigen.extend_eigenfunctions(x, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
+
+        Z_l_t = koopman_eigen.extend_eigenfunctions((self.A@(x.T)).T, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
+
+        eig_c = koopman_eigen.left_koopman_eigvals[eigenvector_index]**p
+        traj_error = np.linalg.norm(Z_l_t - eig_c*Z_l)/np.sqrt(x.shape[0])
+        return traj_error
+
+    def trajectory_bound_const(self, koopman_eigen, x, p, eigenval_index=0):
+        """Compute constant of trajectory error bound
+
+        Args:
+            koopman_eigen (_type_): _description_
+            x (_type_): _description_
+            p (_type_): _description_
+            eigenval_index (int, optional): _description_. Defaults to 0.
+        """
+
+        def x_error(z, p, eigvalue):
+            z = z.reshape(1,z.shape[0])
+    
+            phi_z = koopman_eigen.dict_transform(z)
+            phi_Az = koopman_eigen.dict_transform((self.A@z.T).T)
+    
+            a = np.linalg.norm(phi_Az - eigvalue *phi_z)            
+            s = 0
+            for j in range(0, p):
+                s =+ (np.linalg.norm(phi_Az)**(p-1-j)) * (np.linalg.norm(phi_z)**j) * (eigvalue**j)
+            
+            if p == 1:
+                return a
+                
+            else:
+                return a*s
+
+        eigvalue = koopman_eigen.left_koopman_eigvals[eigenval_index]
+
+        c = np.linalg.norm(np.apply_along_axis(lambda z:x_error(z, p, eigvalue), 1, x))
+        
+        c = c/np.sqrt(x.shape[0])
+        return c
+
+   

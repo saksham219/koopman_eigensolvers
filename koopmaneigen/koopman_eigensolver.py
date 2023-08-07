@@ -1,3 +1,4 @@
+from xmlrpc.client import boolean
 import numpy as np
 import pandas as pd
 from datafold.appfold.edmd import EDMD
@@ -5,7 +6,7 @@ from datafold.utils.general import sort_eigenpairs
 from datafold.pcfold import TSCDataFrame
 
 class KoopmanEigenSolvers:
-    def __init__(self, edmd: EDMD, tsc_data: TSCDataFrame):
+    def __init__(self, edmd: EDMD, tsc_data: TSCDataFrame, include_id_state: boolean=True):
         """_summary_
 
         Args:
@@ -15,8 +16,12 @@ class KoopmanEigenSolvers:
     
         self.edmd = edmd
         self.tsc_data = tsc_data
+        self.include_id_state = include_id_state
         dictionary_eval = self.edmd.dict_steps[0][1].transform(tsc_data)
-        dictionary_eval = self.edmd._attach_id_state(X=tsc_data, X_dict=dictionary_eval) #include id states
+        if include_id_state:
+            dictionary_eval = self.edmd._attach_id_state(X=tsc_data, X_dict=dictionary_eval) #include id states
+        # normalize here?
+
         self.koopman_matrix = self.edmd.dmd_model._compute_koopman_matrix(dictionary_eval)
         
         # calculate right eigenvectors
@@ -36,9 +41,15 @@ class KoopmanEigenSolvers:
         df.columns.name = "feature"
 
         dictionary_eval = self.edmd.dict_steps[0][1].transform(df)
-        dictionary_eval = self.edmd._attach_id_state(X=df, X_dict=dictionary_eval).to_numpy()
+        if self.include_id_state:
+            dictionary_eval = self.edmd._attach_id_state(X=df, X_dict=dictionary_eval).to_numpy()
+        else:
+            dictionary_eval = dictionary_eval.to_numpy()
         return dictionary_eval
 
+    def normalize_dict_transform(self, dictionary_eval):
+        dict_eval_norm = np.apply_along_axis(lambda x:x/np.linalg.norm(x), 1, np.array(dictionary_eval))
+        return dict_eval_norm
 
     def eigenfunction_left(self, left_eigenvector):
         """Generate eigenfunction of the Koopman operator using a left eigenvector
@@ -46,6 +57,7 @@ class KoopmanEigenSolvers:
         Args:
             left_eigenvector (np.ndarray or np.array): _description_
         """
+        # return lambda x: self.normalize_dict_transform(self.dict_transform(x)) @ left_eigenvector
         return lambda x: self.dict_transform(x) @ left_eigenvector
         
 
@@ -62,6 +74,7 @@ class KoopmanEigenSolvers:
         assert len(eigenvector_indexes) == 2
 
         dictionary_eval = self.dict_transform(x)
+        # dictionary_eval = self.normalize_dict_transform(dictionary_eval)
 
         v_1_phi = (dictionary_eval @ self.left_koopman_eigvecs[:,eigenvector_indexes[0]])
         v_2_phi = (dictionary_eval @ self.left_koopman_eigvecs[:,eigenvector_indexes[1]])
