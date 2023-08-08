@@ -131,7 +131,7 @@ class Linear2dSystem:
         plt.colorbar(h) 
 
 
-    def trajectory_error_power(self, koopman_eigen, x, p, eigenvector_index=0):        
+    def trajectory_error_power(self, koopman_eigen, x, p, eigenvector_index=0, delv_norm=None):  
         """Compute trajectory error for extended eigenfunction
 
 
@@ -140,18 +140,30 @@ class Linear2dSystem:
             x (_type_): values of grid coordinates
             p (_type_): power
             eigenvector_index (int, optional): Eigenvector index to use for extending eigenfunction. Defaults to 0.
+            delv_norm (float, optional): norm of error vector added to left eigenvectors. Defaults to None
         """
         assert x.shape[1] == 2
+        
+        if not delv_norm:
+            Z_l = koopman_eigen.extend_eigenfunctions(x, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
 
-        Z_l = koopman_eigen.extend_eigenfunctions(x, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
+            Z_l_t = koopman_eigen.extend_eigenfunctions((self.A@(x.T)).T, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
 
-        Z_l_t = koopman_eigen.extend_eigenfunctions((self.A@(x.T)).T, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
+        if delv_norm:
+            delv = np.random.rand(2)
+            delv = (delv/np.linalg.norm(delv)) * delv_norm
+            print("using delvnorm: ",np.linalg.norm(delv))
+            
+            Z_l = koopman_eigen.extend_eigenfunctions_delv(x, delv=delv, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
+
+            Z_l_t = koopman_eigen.extend_eigenfunctions_delv((self.A@(x.T)).T, delv=delv, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
+
 
         eig_c = koopman_eigen.left_koopman_eigvals[eigenvector_index]**p
         traj_error = np.linalg.norm(Z_l_t - eig_c*Z_l)/np.sqrt(x.shape[0])
         return traj_error
 
-    def trajectory_bound_const(self, koopman_eigen, x, p, eigenval_index=0):
+    def trajectory_bound_const(self, koopman_eigen, x, p, eigenval_index=0, delv_norm=None):
         """Compute constant of trajectory error bound
 
         Args:
@@ -159,6 +171,7 @@ class Linear2dSystem:
             x (_type_): _description_
             p (_type_): _description_
             eigenval_index (int, optional): _description_. Defaults to 0.
+            delv_norm (float, optional): norm of error vector added to left eigenvectors. Defaults to None
         """
 
         def x_error(z, p, eigvalue):
@@ -166,23 +179,26 @@ class Linear2dSystem:
     
             phi_z = koopman_eigen.dict_transform(z)
             phi_Az = koopman_eigen.dict_transform((self.A@z.T).T)
-    
+
+            assert phi_z.shape[0] == 1
+            assert phi_Az.shape[0] == 1
+
             a = np.linalg.norm(phi_Az - eigvalue *phi_z)            
             s = 0
             for j in range(0, p):
-                s =+ (np.linalg.norm(phi_Az)**(p-1-j)) * (np.linalg.norm(phi_z)**j) * (eigvalue**j)
-            
-            if p == 1:
-                return a
-                
-            else:
-                return a*s
+                s += (np.linalg.norm(phi_Az)**(p-1-j)) * (np.linalg.norm(phi_z)**j) * (eigvalue**j)
+
+            return a*s
 
         eigvalue = koopman_eigen.left_koopman_eigvals[eigenval_index]
 
         c = np.linalg.norm(np.apply_along_axis(lambda z:x_error(z, p, eigvalue), 1, x))
         
         c = c/np.sqrt(x.shape[0])
+
+        if delv_norm:
+            c = delv_norm * c
+
         return c
 
    

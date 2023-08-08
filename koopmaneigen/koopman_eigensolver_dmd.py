@@ -62,6 +62,18 @@ class KoopmanEigenSolversDMD:
 
         return eigfunc_extended
 
+    def extend_eigenfunctions_delv(self, x:np.ndarray, delv, eigenvector_indexes=[0,1], pow_i = 1, pow_j=1, normalize=True):
+        assert len(eigenvector_indexes) == 2
+       
+        v_1_c_phi = (x @ (self.left_koopman_eigvecs[:,eigenvector_indexes[0]] + delv))
+        v_2_c_phi = (x @ (self.left_koopman_eigvecs[:,eigenvector_indexes[1]] + delv))
+       
+        eigfunc_extended_c = (v_1_c_phi ** pow_i) * (v_2_c_phi ** pow_j)   
+        if normalize:   
+            eigfunc_extended_c = eigfunc_extended_c/np.max(np.abs(eigfunc_extended_c))
+
+        return eigfunc_extended_c
+
 
     def eigenfunction_right(self, x:np.ndarray, right_eigvecs=None):        
         """Get the eigenfunctions using the right eigenvector matrix
