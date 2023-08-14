@@ -1,3 +1,4 @@
+from this import d
 import numpy as np
 import pandas as pd
 from datafold.pcfold import TSCDataFrame
@@ -173,7 +174,7 @@ class Linear2dSystemContinuous:
         return traj_error
 
     def trajectory_bound_const(self, koopman_eigen, x, p, eigenval_index=0, delv_norm=None):
-        """Compute constant of trajectory error bound
+        """Compute constant of trajectory error bound due to error in eigenvector
 
         Args:
             koopman_eigen (_type_): _description_
@@ -211,16 +212,77 @@ class Linear2dSystemContinuous:
         return c
 
     def euler_method(self, ic, t, h=0.1):
+        """_summary_
+
+        Args:
+            ic (_type_): _description_
+            t (_type_): _description_
+            h (float, optional): _description_. Defaults to 0.1.
+
+        Returns:
+            _type_: _description_
+        """
 
         t_eval = np.arange(0, t, h)
-        
         # Explicit Euler Method
-        s = np.zeros((len(t_eval), ic.shape[0]))
-        s[0,:] = ic
 
+        assert ic.ndim == 1
+        s = np.zeros((len(t_eval), ic.shape[0]))
+
+        s[0,:] = ic
         for i in range(0, len(t_eval) - 1):
-            s[i + 1,:] = s[i, :] + h*(self.A@(s[i, :]))
+            s[i + 1,:] = s[i, :] + h*(self.A@(s[i, :].T))
 
         return s[-1,:]
 
-   
+    def trajectory_error_euler(self, koopman_eigen, x, p, h=0.01, eigenvector_index=0, delv_norm=None):  
+        """Compute trajectory error for extended eigenfunction
+
+
+        Args:
+            koopman_eigen (KoopmanEigen): object of koopman eigen
+            x (_type_): values of grid coordinates
+            p (_type_): power
+            h (float): euler method step size
+            eigenvector_index (int, optional): Eigenvector index to use for extending eigenfunction. Defaults to 0.
+            delv_norm (float, optional): norm of error vector added to left eigenvectors. Defaults to None
+        """
+        assert x.shape[1] == 2
+        
+
+        Z_l = koopman_eigen.extend_eigenfunctions(x, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
+
+        x_euler = np.apply_along_axis(lambda x: self.euler_method(x, self.t_sample, h=h), 1, x)
+
+        Z_l_t = koopman_eigen.extend_eigenfunctions(x_euler, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
+
+        eig_c = koopman_eigen.left_koopman_eigvals[eigenvector_index]**p
+        traj_error_euler = np.linalg.norm(Z_l_t - eig_c*Z_l)/np.sqrt(x.shape[0])
+        return traj_error_euler
+    
+    def get_euler_eps_G(self, x, h):
+        x_euler = np.apply_along_axis(lambda x: self.euler_method(x, self.t_sample, h=h), 1, x)
+        x_exact = (ln.expm(self.A*self.t_sample) @ (x.T)).T
+
+        epsilon_x = x_euler - x_exact
+        epsilon_G = np.apply_along_axis(lambda x: np.linalg.norm(x), 1, epsilon_x).max()
+        return epsilon_G
+
+
+    def trajectory_bound_integration(self, koopman_eigen, x, p, L, epsilon_G, eigenval_index=0):
+        eigvalue = koopman_eigen.left_koopman_eigvals[eigenval_index]
+
+        M = np.apply_along_axis(lambda z: np.linalg.norm(z), 1, koopman_eigen.dict_transform(x)).max()
+
+        M_F = np.apply_along_axis(lambda x: np.linalg.norm(x), 1, (self.A@(x.T)).T).max()
+
+        bound_1 = (eigvalue * M  + L* epsilon_G)**p - (eigvalue * M)**p
+        bound_2 = (L**p) * ((M_F  + epsilon_G)**p - (M_F)**p)
+
+        return ({"bound_1": bound_1, "bound_2": bound_2})
+
+    def trajectory_bound_given_epsilon(self, koopman_eigen, x, p, L, epsilon, eigenval_index):
+        eigvalue = koopman_eigen.left_koopman_eigvals[eigenval_index]
+        M = np.apply_along_axis(lambda z: np.linalg.norm(z), 1, koopman_eigen.dict_transform(x)).max()
+
+        return (1/L) * ((epsilon + (eigvalue * M)**p)**(1/p) - eigvalue*M)
