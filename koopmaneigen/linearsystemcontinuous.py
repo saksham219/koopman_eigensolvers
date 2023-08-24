@@ -269,7 +269,23 @@ class Linear2dSystemContinuous:
         return epsilon_G
 
 
-    def trajectory_bound_integration(self, koopman_eigen, x, p, L, epsilon_G, eigenval_index=0):
+    def compute_singular_max(self, x, edmd=False):
+        y = ln.expm(self.A*self.t_sample)@x.T
+    
+        x1 = y[0]
+        x2 = y[1]
+        
+        if edmd:
+            J = np.array([[1,0], [0, 1], [2*x1, 0], [0, 2*x2], [x2, x1], [3*(x1**2), 0], [2*x1*x2, x1**2],
+                            [x2**2, 2*x1*x2], [0, 3*(x2**2)]])
+    #     u,s,v_t = np.linalg.svd(J)
+        else:
+            J = np.array([[1, 0], [0,1]])        
+        eigs = np.linalg.eig(J.T @ J)[0]
+        
+        return(np.sqrt(np.max(eigs)))
+
+    def trajectory_bound_integration(self, koopman_eigen, x, p, L, epsilon_G, eigenval_index=0, ctg_i=None):
         eigvalue = koopman_eigen.left_koopman_eigvals[eigenval_index]
 
         M = np.apply_along_axis(lambda z: np.linalg.norm(z), 1, koopman_eigen.dict_transform(x)).max()
@@ -279,10 +295,63 @@ class Linear2dSystemContinuous:
         bound_1 = (eigvalue * M  + L* epsilon_G)**p - (eigvalue * M)**p
         bound_2 = (L**p) * ((M_F  + epsilon_G)**p - (M_F)**p)
 
-        return ({"bound_1": bound_1, "bound_2": bound_2})
+        edmd = True
+        if hasattr(koopman_eigen, "dmd"):
+            edmd = False
 
-    def trajectory_bound_given_epsilon(self, koopman_eigen, x, p, L, epsilon, eigenval_index):
+        jac_singular_max = np.apply_along_axis(lambda y: self.compute_singular_max(y, edmd=edmd), 1, x).max()
+        print("jac_singular_max", jac_singular_max)
+        bound_3 = (eigvalue * M  + jac_singular_max* epsilon_G)**p - (eigvalue * M)**p
+
+        bound_4 = None
+        if ctg_i:
+            bound_4 = epsilon_G * ctg_i
+
+        return ({"bound_1": bound_1, "bound_2": bound_2, 
+                    "bound_3": bound_3, "bound_4": bound_4})
+
+    def trajectory_bound_given_epsilon(self, koopman_eigen, x, p, L, epsilon, eigenval_index, ctg_i):
+        assert x.shape[1] == 2
         eigvalue = koopman_eigen.left_koopman_eigvals[eigenval_index]
         M = np.apply_along_axis(lambda z: np.linalg.norm(z), 1, koopman_eigen.dict_transform(x)).max()
 
-        return (1/L) * ((epsilon + (eigvalue * M)**p)**(1/p) - eigvalue*M)
+        edmd = True
+        if hasattr(koopman_eigen, "dmd"):
+            edmd = False
+
+        jac_singular_max = np.apply_along_axis(lambda y: self.compute_singular_max(y, edmd=edmd), 1, x).max()
+        # replaced 1/L
+        # return (1/jac_singular_max) * ((epsilon + (eigvalue * M)**p)**(1/p) - eigvalue*M)
+        
+        return epsilon/ctg_i
+
+
+    def trajectory_bound_integration_euler_const(self, koopman_eigen, x, p, h=0.01, eigenval_index=0):
+        assert x.shape[1] == 2
+
+        def x_error(z, p, eigvalue, edmd):
+    
+            phi_z = koopman_eigen.dict_transform(z.reshape(1,z.shape[0]))
+            z_euler = self.euler_method(z, self.t_sample, h=h)
+            phi_euler = koopman_eigen.dict_transform(z_euler.reshape(1,z_euler.shape[0]))
+
+            assert phi_z.shape[0] == 1
+            assert phi_euler.shape[0] == 1
+
+            a = self.compute_singular_max(z, edmd=edmd)
+            s = 0
+            for j in range(0, p):
+                s += (np.linalg.norm(phi_euler)**(p-1-j)) * (np.linalg.norm(phi_z)**j) * (eigvalue**j)
+            return a*s
+
+        edmd = True
+        if hasattr(koopman_eigen, "dmd"):
+            edmd = False
+
+        eigvalue = koopman_eigen.left_koopman_eigvals[eigenval_index]
+
+        c = np.linalg.norm(np.apply_along_axis(lambda z:x_error(z, p, eigvalue, edmd=edmd), 1, x))
+        
+        c = c/np.sqrt(x.shape[0])
+
+        return c
