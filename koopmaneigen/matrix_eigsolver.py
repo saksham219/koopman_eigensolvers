@@ -29,6 +29,7 @@ class MatrixEigSolver:
             x = y / norm 
             eigenvalue = np.dot(np.dot(A, x), x.T)
             if np.abs(eig_old - eigenvalue) < tolerance:
+                print("iterations: ", i)
                 return x, eigenvalue
             else:
                 eig_old = eigenvalue
@@ -42,12 +43,14 @@ class MatrixEigSolver:
 
         n = A.shape[0]
         m = 2 # arnoldi krylow subspace dimension
-    #     x = np.random.rand(n) + 1j* np.random.rand(n)
+        # x = np.random.rand(n) + 1j* np.random.rand(n)
         x = np.random.rand(n)
         x = x/np.linalg.norm(x)
         
         # run a few steps of power iteration
-        x, _ = self.power_iteration(A, max_iterations=50)
+        # how to choose this max_iter?
+        assert 1000<max_iterations
+        x, _ = self.power_iteration(A, max_iterations=500)
         
         h = np.zeros((m+1, m), dtype=complex)
         V = np.zeros((n, m+1), dtype=complex)
@@ -80,8 +83,11 @@ class MatrixEigSolver:
 
             # get eigenvector corresponding to the largest eigenvalue
             eigvec = np.array([1, h[1,0]/(lambda_1 - h[1,1]) ])
-            eigvec = eigvec/np.linalg.norm(eigvec)
+            # eigvec = np.array([h[0,1], lambda_1  - h[0,0]])
+            # eigvec = np.array([lambda_1 - h[1,1], h[1,0]])
 
+            eigvec = eigvec/np.linalg.norm(eigvec)
+           
             # get eigenvector of original matrix
             x = V[:,0:2] @ eigvec
             x = x/np.linalg.norm(x)
@@ -175,7 +181,7 @@ class MatrixEigSolver:
             f_norm = f/(f.T@v)
             # f_norm = f/(f.conj().T@v)
 
-            eigs.append((v, l))
+            eigs.append((v, l)) # why add the eigenvectors here after normalization?
             left_eigs.append((f, l_d))
 
             # deflate matrix using left eigenvector
@@ -191,6 +197,7 @@ class MatrixEigSolver:
                 v_c = v.conj()
                 
                 eigs.append((v_c, l_c))
+                left_eigs.append((f_c, l_d.conj()))
                 f_norm_c = f_c/(f_c.T@ v_c)
                 
                 A = A - l_c * v_c @ f_norm_c.T
