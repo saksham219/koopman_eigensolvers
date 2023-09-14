@@ -3,20 +3,22 @@ import pandas as pd
 from datafold.pcfold import TSCDataFrame
 import matplotlib.pyplot as plt
 
-class Linear2dSystem:
 
-    def __init__(self, A: np.ndarray, eig_i, eig_j, eigenfunction_i, eigenfunction_j) -> None:
+class Linear2dSystem:
+    def __init__(
+        self, A: np.ndarray, eig_i, eig_j, eigenfunction_i, eigenfunction_j
+    ) -> None:
         """_summary_
 
         Args:
             A (np.ndarray): 2d numpy matrix
-            eig_i (_type_): first eigenvalue 
+            eig_i (_type_): first eigenvalue
             eig_j (_type_): second eigenvalue
             eigenfunction_i (_type_): function handle for first koopman eigenfunction
             eigenfunction_j (_type_): function handle for second koopman eigenfunction
-        """  
-             
-        assert A.shape == (2,2)
+        """
+
+        assert A.shape == (2, 2)
         self.A = A
         self.eig_i = eig_i
         self.eig_j = eig_j
@@ -35,8 +37,8 @@ class Linear2dSystem:
             solution = self.A @ ic
 
             solution = pd.DataFrame(
-                data= np.array([ic, solution]),
-                index=[0,1],
+                data=np.array([ic, solution]),
+                index=[0, 1],
                 columns=["x1", "x2"],
             )
 
@@ -45,7 +47,7 @@ class Linear2dSystem:
         tsc_data = TSCDataFrame.from_frame_list(time_series_dfs)
         return tsc_data
 
-    def generate_trajectory(self, initial_condition, n_steps = 100):
+    def generate_trajectory(self, initial_condition, n_steps=100):
         """Generate a trajectory with given number of steps and initial condition
 
         Args:
@@ -58,13 +60,13 @@ class Linear2dSystem:
         df = [initial_condition.flatten()]
         solution = initial_condition.flatten()
         for s in np.arange(0, n_steps):
-            solution = self.A@ solution
+            solution = self.A @ solution
             df.append(solution)
 
         df = pd.DataFrame(df, columns=["x1", "x2"])
         return df
 
-    def generate_eigenfunction(self, x, y, m = 1, n = 1):
+    def generate_eigenfunction(self, x, y, m=1, n=1):
         """generate explicit koopman eigenfunctions
 
         Args:
@@ -75,40 +77,38 @@ class Linear2dSystem:
 
         Returns:
             _type_: _description_
-        """    
+        """
         p = 1
         for i in range(m):
-            p = p * self.eigenfunction_i(x,y)
-        
+            p = p * self.eigenfunction_i(x, y)
+
         for i in range(n):
-            p = p * self.eigenfunction_j(x,y)
-        
+            p = p * self.eigenfunction_j(x, y)
+
         return p
-    
+
     def get_sorted_eigvalues(self, max_exponent_sum=4):
         """get sorted koopman eigenvalues where eigenvalues are powers of explicit eigenvalues and their products
-        
+
         Args:
             max_exponent_sum (int, optional): maximum sum of powers of eigenvalues. Defaults to 3.
         """
 
         eig_dict = {}
-        for m in range(max_exponent_sum+1):
-            for n in range(max_exponent_sum+1):
-                if m+n>max_exponent_sum:
+        for m in range(max_exponent_sum + 1):
+            for n in range(max_exponent_sum + 1):
+                if m + n > max_exponent_sum:
                     continue
-                if m==0 and n==0:
+                if m == 0 and n == 0:
                     continue
-                eig = (self.eig_i)**m * (self.eig_j) ** n
-                eig_dict[(m,n)] = eig
-            
+                eig = (self.eig_i) ** m * (self.eig_j) ** n
+                eig_dict[(m, n)] = eig
+
         sorted_eig = sorted(eig_dict, key=eig_dict.get, reverse=True)
         sorted_eig
         return sorted_eig
-                     
 
-
-    def plot_eigenfunction_contour(self, x, y,  m, n, ax, normalize=True):
+    def plot_eigenfunction_contour(self, x, y, m, n, ax, normalize=True):
         """Plot a contour map of a given powers of eigenfunction
 
         Args:
@@ -123,15 +123,16 @@ class Linear2dSystem:
             _type_: _description_
         """
         X, Y = np.meshgrid(x, y)
-        Z = self.generate_eigenfunction(X, Y, m,n)
+        Z = self.generate_eigenfunction(X, Y, m, n)
         if normalize:
-            Z = Z/np.max(np.abs(Z))
+            Z = Z / np.max(np.abs(Z))
 
-        h = ax.contourf(X, Y, Z, cmap='RdYlBu_r')
-        plt.colorbar(h) 
+        h = ax.contourf(X, Y, Z, cmap="RdYlBu_r")
+        plt.colorbar(h)
 
-
-    def trajectory_error_power(self, koopman_eigen, x, p, eigenvector_index=0, delv_norm=None):  
+    def trajectory_error_power(
+        self, koopman_eigen, x, p, eigenvector_index=0, delv_norm=None
+    ):
         """Compute trajectory error for extended eigenfunction
 
 
@@ -143,27 +144,54 @@ class Linear2dSystem:
             delv_norm (float, optional): norm of error vector added to left eigenvectors. Defaults to None
         """
         assert x.shape[1] == 2
-        
-        if not delv_norm:
-            Z_l = koopman_eigen.extend_eigenfunctions(x, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
 
-            Z_l_t = koopman_eigen.extend_eigenfunctions((self.A@(x.T)).T, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
+        if not delv_norm:
+            Z_l = koopman_eigen.extend_eigenfunctions(
+                x,
+                eigenvector_indexes=[eigenvector_index, 0],
+                pow_i=p,
+                pow_j=0,
+                normalize=False,
+            )
+
+            Z_l_t = koopman_eigen.extend_eigenfunctions(
+                (self.A @ (x.T)).T,
+                eigenvector_indexes=[eigenvector_index, 0],
+                pow_i=p,
+                pow_j=0,
+                normalize=False,
+            )
 
         if delv_norm:
             delv = np.random.rand(2)
-            delv = (delv/np.linalg.norm(delv)) * delv_norm
-            print("using delvnorm: ",np.linalg.norm(delv))
-            
-            Z_l = koopman_eigen.extend_eigenfunctions_delv(x, delv=delv, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
+            delv = (delv / np.linalg.norm(delv)) * delv_norm
+            print("using delvnorm: ", np.linalg.norm(delv))
 
-            Z_l_t = koopman_eigen.extend_eigenfunctions_delv((self.A@(x.T)).T, delv=delv, eigenvector_indexes=[eigenvector_index, 0], pow_i=p, pow_j=0, normalize=False)
+            Z_l = koopman_eigen.extend_eigenfunctions_delv(
+                x,
+                delv=delv,
+                eigenvector_indexes=[eigenvector_index, 0],
+                pow_i=p,
+                pow_j=0,
+                normalize=False,
+            )
 
+            Z_l_t = koopman_eigen.extend_eigenfunctions_delv(
+                (self.A @ (x.T)).T,
+                delv=delv,
+                eigenvector_indexes=[eigenvector_index, 0],
+                pow_i=p,
+                pow_j=0,
+                normalize=False,
+            )
 
-        eig_c = koopman_eigen.left_koopman_eigvals[eigenvector_index]**p
-        traj_error = np.linalg.norm(Z_l_t - eig_c*Z_l)/np.sqrt(x.shape[0])
-        return traj_error
+        eig_c = koopman_eigen.left_koopman_eigvals[eigenvector_index] ** p
+        traj_error = np.linalg.norm(Z_l_t - eig_c * Z_l) / np.sqrt(x.shape[0])
+        return traj_error ** (1 / p)
 
-    def trajectory_bound_const(self, koopman_eigen, x, p, eigenval_index=0, delv_norm=None):
+    def trajectory_bound_const(
+        self, koopman_eigen, x, p, eigenval_index=0, delv_norm=None
+    ):
         """Compute constant of trajectory error bound
 
         Args:
@@ -175,30 +203,38 @@ class Linear2dSystem:
         """
 
         def x_error(z, p, eigvalue):
-            z = z.reshape(1,z.shape[0])
-    
+            z = z.reshape(1, z.shape[0])
+
             phi_z = koopman_eigen.dict_transform(z)
-            phi_Az = koopman_eigen.dict_transform((self.A@z.T).T)
+            phi_Az = koopman_eigen.dict_transform((self.A @ z.T).T)
 
             assert phi_z.shape[0] == 1
             assert phi_Az.shape[0] == 1
 
-            a = np.linalg.norm(phi_Az - eigvalue *phi_z)            
+            a = np.linalg.norm(phi_Az - eigvalue * phi_z)
             s = 0
             for j in range(0, p):
-                s += (np.linalg.norm(phi_Az)**(p-1-j)) * (np.linalg.norm(phi_z)**j) * (eigvalue**j)
+                s += (
+                    (np.linalg.norm(phi_Az) ** (p - 1 - j))
+                    * (np.linalg.norm(phi_z) ** j)
+                    * (eigvalue**j)
+                )
 
-            return a*s
+            return a * s
 
         eigvalue = koopman_eigen.left_koopman_eigvals[eigenval_index]
 
-        c = np.linalg.norm(np.apply_along_axis(lambda z:x_error(z, p, eigvalue), 1, x))
-        
-        c = c/np.sqrt(x.shape[0])
+        c = np.linalg.norm(np.apply_along_axis(lambda z: x_error(z, p, eigvalue), 1, x))
+
+        c = c / np.sqrt(x.shape[0])
 
         if delv_norm:
             c = delv_norm * c
 
-        return c
+        return c ** (1 / p)
 
-   
+
+# #    def get_power_extend_eigen(self, koopman_eigen, x, p, eigenval_index):
+#        c_Tg_p = linear_system.trajectory_bound_const(koopman_eigen, x, p = p, eigenval_index=eigenval_index)
+#     etg = linear_system.trajectory_bound_const(koopman_eigen, x, p = p, eigenval_index=eigenval_index, delv_norm=delv_norm)
+#     print("m: ", m, delv_norm < epsilon/c_Tg_p, etg < epsilon)
