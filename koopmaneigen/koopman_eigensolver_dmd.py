@@ -135,6 +135,15 @@ class KoopmanEigenSolversDMD:
         return eigfunc_matrix
 
 
+    def compute_singular_max(self, J=None, x=None):
+        # y = np.array([x[0]*np.exp(t_sample),(x[1] - (x[0]**2)/3)* np.exp(-t_sample) + (x[0]**2)/3 * np.exp(2*t_sample)]).T
+
+        J = np.array([[1, 0], [0,1]])        
+        eigs = np.linalg.eig(J.T @ J)[0]
+        
+        return(np.sqrt(np.max(eigs)))
+
+
 
 
 

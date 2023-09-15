@@ -4,6 +4,7 @@ import pandas as pd
 from datafold.appfold.edmd import EDMD
 from datafold.utils.general import sort_eigenpairs
 from datafold.pcfold import TSCDataFrame
+import sympy as sym
 
 class KoopmanEigenSolvers:
     def __init__(self, edmd: EDMD, tsc_data: TSCDataFrame, include_id_state: boolean=True):
@@ -28,7 +29,7 @@ class KoopmanEigenSolvers:
         self.right_koopman_eigvals, self.right_koopman_eigvecs = sort_eigenpairs(*np.linalg.eig(self.koopman_matrix))
 
         # calculate left eigenvectors
-        self.left_koopman_eigvals, self.left_koopman_eigvecs = sort_eigenpairs(*np.linalg.eig(self.koopman_matrix.T))
+        self.left_koopman_eigvals, self.left_koopman_eigvecs = sort_eigenpairs(*np.linalg.eig(self.koopman_matrix.conj().T))
 
     def dict_transform(self, x: np.ndarray):
         """Transform an array according to the edmd dictionary basis
@@ -146,7 +147,61 @@ class KoopmanEigenSolvers:
         eigfunc_matrix = eigfunc_matrix.T
         return eigfunc_matrix
 
+    def calculate_jacobian(self, x):
+        if "polynomial" in self.edmd.named_steps:
+             raise Exception("for polynomial basis use calculate_jacobian_handle")
 
+        
+        centers = np.array(self.edmd.named_steps["rbf"].centers_)
+
+        eps = self.edmd.named_steps["rbf"].kernel.epsilon
+
+        J = np.apply_along_axis(lambda c: np.array([np.exp( (-1/(2*eps)) * (np.linalg.norm(x-c)**2)) *(-1/eps) * (x[0]-c[0]), 
+                                    np.exp( (-1/(2*eps)) * (np.linalg.norm(x-c)**2)) *(-1/eps) * (x[1]-c[1])]), 1, centers).T
+        return J
+
+
+    def calculate_jacobian_handle(self):
+
+        if "rbf" in self.edmd.named_steps:
+            raise Exception("rbf doesn't use jacobian handle. use calculate_jacobian")
+            # calculate jacobian for radial basis functions
+            pass
+
+        x1 = sym.Symbol("x1")
+        x2 = sym.Symbol("x2")
+        max_degree = self.edmd.named_steps["polynomial"].degree
+
+        poly_list = []
+        jac_list = []
+        for m in range(max_degree+1):
+            for n in range(max_degree+1):
+                if m ==0 and n==0:
+                    continue
+                if m+n>max_degree:
+                    continue
+                poly = (x1**m ) * (x2**n)
+
+                poly_list.append(poly)
+                jac_list.append([sym.diff(poly, x1),sym.diff(poly, x2)])
+                
+        # L = sym.lambdify([x1,x2], [j for i in jac_list for j in i])
+        J = sym.lambdify([x1,x2],jac_list)
+        return J
+
+    def compute_singular_max(self, J=None, x=None):
+        # y = np.array([x[0]*np.exp(t_sample),(x[1] - (x[0]**2)/3)* np.exp(-t_sample) + (x[0]**2)/3 * np.exp(2*t_sample)]).T
+
+        if "rbf" in self.edmd.named_steps:
+            J_arr = self.calculate_jacobian(x)
+
+        # if J is a function handle
+        else:
+            J_arr = np.array(J(*x)).T
+
+        eigs = np.linalg.eig(J_arr.T@J_arr)[0]
+
+        return np.sqrt(np.max(eigs))
 
 
 
